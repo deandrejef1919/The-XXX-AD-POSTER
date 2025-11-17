@@ -150,10 +150,20 @@ def get_conn():
     return conn
 
 
+def ensure_column(conn, table: str, col_name: str, col_def: str):
+    """Add column if it does not exist (for upgrades)."""
+    cur = conn.cursor()
+    cur.execute(f"PRAGMA table_info({table})")
+    cols = [row[1] for row in cur.fetchall()]
+    if col_name not in cols:
+        cur.execute(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_def}")
+
+
 def init_db():
     conn = get_conn()
     cur = conn.cursor()
 
+    # Programs
     cur.execute(
         """
         CREATE TABLE IF NOT EXISTS affiliate_programs (
@@ -168,6 +178,7 @@ def init_db():
         """
     )
 
+    # Ads (with traffic_source)
     cur.execute(
         """
         CREATE TABLE IF NOT EXISTS ad_creatives (
@@ -179,23 +190,32 @@ def init_db():
             body TEXT,
             call_to_action TEXT,
             placement_type TEXT,
+            traffic_source TEXT,
             FOREIGN KEY (program_id) REFERENCES affiliate_programs (id)
         )
         """
     )
 
+    # Performance (with impressions + revenue)
     cur.execute(
         """
         CREATE TABLE IF NOT EXISTS ad_performance (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             ad_id INTEGER NOT NULL UNIQUE,
+            impressions INTEGER DEFAULT 0,
             clicks INTEGER DEFAULT 0,
             leads INTEGER DEFAULT 0,
             sales INTEGER DEFAULT 0,
+            revenue REAL DEFAULT 0.0,
             FOREIGN KEY (ad_id) REFERENCES ad_creatives (id)
         )
         """
     )
+
+    # In case the DB was created with an older version, ensure new columns exist
+    ensure_column(conn, "ad_creatives", "traffic_source", "TEXT")
+    ensure_column(conn, "ad_performance", "impressions", "INTEGER DEFAULT 0")
+    ensure_column(conn, "ad_performance", "revenue", "REAL DEFAULT 0.0")
 
     conn.commit()
     conn.close()
@@ -249,21 +269,45 @@ def fetch_ads() -> List[sqlite3.Row]:
     return rows
 
 
-def insert_ad(program_id, title, angle, headline, body, call_to_action, placement_type) -> int:
+def insert_ad(
+    program_id,
+    title,
+    angle,
+    headline,
+    body,
+    call_to_action,
+    placement_type,
+    traffic_source,
+) -> int:
     conn = get_conn()
     cur = conn.cursor()
     cur.execute(
         """
-        INSERT INTO ad_creatives (program_id, title, angle, headline, body, call_to_action, placement_type)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO ad_creatives (
+            program_id, title, angle, headline, body,
+            call_to_action, placement_type, traffic_source
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        (program_id, title, angle, headline, body, call_to_action, placement_type),
+        (
+            program_id,
+            title,
+            angle,
+            headline,
+            body,
+            call_to_action,
+            placement_type,
+            traffic_source,
+        ),
     )
     ad_id = cur.lastrowid
 
     # initialize performance row
     cur.execute(
-        "INSERT OR IGNORE INTO ad_performance (ad_id, clicks, leads, sales) VALUES (?, 0, 0, 0)",
+        """
+        INSERT OR IGNORE INTO ad_performance (ad_id, impressions, clicks, leads, sales, revenue)
+        VALUES (?, 0, 0, 0, 0, 0.0)
+        """,
         (ad_id,),
     )
 
@@ -283,22 +327,38 @@ def get_performance_for_ad(ad_id: int) -> Dict:
     conn.close()
     if row:
         return dict(row)
-    return {"ad_id": ad_id, "clicks": 0, "leads": 0, "sales": 0}
+    return {
+        "ad_id": ad_id,
+        "impressions": 0,
+        "clicks": 0,
+        "leads": 0,
+        "sales": 0,
+        "revenue": 0.0,
+    }
 
 
-def update_performance(ad_id: int, clicks: int, leads: int, sales: int):
+def update_performance(
+    ad_id: int,
+    impressions: int,
+    clicks: int,
+    leads: int,
+    sales: int,
+    revenue: float,
+):
     conn = get_conn()
     cur = conn.cursor()
     cur.execute(
         """
-        INSERT INTO ad_performance (ad_id, clicks, leads, sales)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO ad_performance (ad_id, impressions, clicks, leads, sales, revenue)
+        VALUES (?, ?, ?, ?, ?, ?)
         ON CONFLICT(ad_id) DO UPDATE SET
+            impressions = excluded.impressions,
             clicks = excluded.clicks,
             leads = excluded.leads,
-            sales = excluded.sales
+            sales = excluded.sales,
+            revenue = excluded.revenue
         """,
-        (ad_id, clicks, leads, sales),
+        (ad_id, impressions, clicks, leads, sales, revenue),
     )
     conn.commit()
     conn.close()
@@ -315,17 +375,21 @@ def fetch_ads_with_metrics_df() -> pd.DataFrame:
     conn = get_conn()
     df = pd.read_sql_query(
         """
-        SELECT a.id AS ad_id,
-               a.title,
-               a.angle,
-               a.headline,
-               a.body,
-               a.call_to_action,
-               a.placement_type,
-               p.name AS program_name,
-               perf.clicks,
-               perf.leads,
-               perf.sales
+        SELECT
+            a.id AS ad_id,
+            a.title,
+            a.angle,
+            a.headline,
+            a.body,
+            a.call_to_action,
+            a.placement_type,
+            a.traffic_source,
+            p.name AS program_name,
+            perf.impressions,
+            perf.clicks,
+            perf.leads,
+            perf.sales,
+            perf.revenue
         FROM ad_creatives a
         LEFT JOIN affiliate_programs p ON a.program_id = p.id
         LEFT JOIN ad_performance perf ON perf.ad_id = a.id
@@ -441,8 +505,10 @@ def generate_ad_from_brief(
         headline = "100% Discreet · For Adults Only"
     elif hook_style == "Limited-Time":
         headline = f"{offer_type.title()} Deals Ending Soon"
-    else:
+    elif hook_style == "Audience-Focused":
         headline = f"New For {audience.capitalize()}"
+    else:
+        headline = f"Explore Trusted {category_phrase.title()}"
 
     body_lines = [
         f"{offer_name} is for {audience} who want to {promise}.",
@@ -479,7 +545,7 @@ def page_dashboard():
                 <ul>
                     <li><strong>Affiliate Programs:</strong> Track who you’ve applied with and who approved you.</li>
                     <li><strong>Ad Creatives:</strong> Generate clean, non-explicit headlines and body copy.</li>
-                    <li><strong>Performance:</strong> Log clicks, leads & sales to see which angles really work.</li>
+                    <li><strong>Performance:</strong> Log impressions, clicks, leads & sales to see what’s working.</li>
                     <li><strong>Export:</strong> Download CSVs of programs & ads for backup or sharing.</li>
                 </ul>
             </div>
@@ -498,12 +564,27 @@ def page_dashboard():
 
         df_ads = fetch_ads_with_metrics_df()
         if not df_ads.empty:
-            total_clicks = int(df_ads["clicks"].fillna(0).sum())
-            total_leads = int(df_ads["leads"].fillna(0).sum())
-            total_sales = int(df_ads["sales"].fillna(0).sum())
+            df_ads_filled = df_ads.fillna(0)
+            total_impr = int(df_ads_filled["impressions"].sum())
+            total_clicks = int(df_ads_filled["clicks"].sum())
+            total_leads = int(df_ads_filled["leads"].sum())
+            total_sales = int(df_ads_filled["sales"].sum())
+            total_revenue = float(df_ads_filled["revenue"].sum())
+
+            st.write(f"**Total impressions logged:** {total_impr}")
             st.write(f"**Total clicks logged:** {total_clicks}")
             st.write(f"**Total leads logged:** {total_leads}")
             st.write(f"**Total sales logged:** {total_sales}")
+            st.write(f"**Total revenue logged:** ${total_revenue:,.2f}")
+
+            if total_impr > 0:
+                ctr = (total_clicks / total_impr) * 100
+                st.write(f"**Overall CTR:** {ctr:.2f}%")
+            if total_clicks > 0:
+                cr_sales = (total_sales / total_clicks) * 100
+                epc = total_revenue / total_clicks
+                st.write(f"**Overall CR (sales/click):** {cr_sales:.2f}%")
+                st.write(f"**Overall EPC:** ${epc:.3f}")
         else:
             st.write("No performance data yet. Start adding ads and metrics.")
         st.markdown("</div>", unsafe_allow_html=True)
@@ -544,7 +625,14 @@ def page_affiliate_programs():
             if not name or not signup_url:
                 st.error("Please enter at least a program name and signup URL.")
             else:
-                insert_program(name.strip(), niche.strip(), geo_focus.strip(), signup_url.strip(), status.strip(), notes.strip())
+                insert_program(
+                    name.strip(),
+                    niche.strip(),
+                    geo_focus.strip(),
+                    signup_url.strip(),
+                    status.strip(),
+                    notes.strip(),
+                )
                 st.success("Program added.")
                 st.experimental_rerun()
 
@@ -572,7 +660,7 @@ def page_ad_builder():
     st.subheader("📝 Ad Builder – THE XXX AD POSTER")
     st.markdown(
         "Generate short, adult-friendly ad copy for your offers. "
-        "Language is kept non-explicit and focused on benefits, privacy, and discretion."
+        "Language is non-explicit and focuses on benefits, privacy, and discretion."
     )
 
     programs = fetch_programs()
@@ -597,6 +685,10 @@ def page_ad_builder():
             "Placement Type",
             ["Banner (300x250 / 300x100 / 728x90)", "Native / Widget", "Text Only", "Social-Friendly"],
         )
+        traffic_source = st.selectbox(
+            "Traffic Source / Network",
+            ["ExoClick", "JuicyAds", "TrafficJunky", "Adsterra", "Other / Mixed"],
+        )
 
     with st.form("ad_form"):
         st.markdown("### Ad Brief")
@@ -609,46 +701,99 @@ def page_ad_builder():
         )
         hook_style = st.selectbox(
             "Hook Style",
-            ["Curiosity", "Discreet / Privacy", "Limited-Time", "Audience-Focused"],
+            [
+                "Curiosity",
+                "Discreet / Privacy",
+                "Limited-Time",
+                "Audience-Focused",
+                "Mix: Use multiple angles",
+            ],
             index=1,
         )
 
         auto_generate = st.checkbox("Auto-generate copy from this brief", value=True)
 
-        manual_headline = st.text_input("Headline (optional, overrides auto)")
-        manual_body = st.text_area("Body Text (optional, overrides auto)", height=120)
+        manual_headline = st.text_input("Headline (optional, overrides auto for single ad)")
+        manual_body = st.text_area("Body Text (optional, overrides auto for single ad)", height=120)
         manual_cta = st.text_input("Call To Action", "Tap to explore today’s offers.")
 
         ad_title = st.text_input("Internal Ad Name / Label", "Main Angle – Mobile Banner")
 
-        submitted = st.form_submit_button("✨ Generate & Save Ad")
+        num_variants = st.slider(
+            "How many variants from this brief?",
+            min_value=1,
+            max_value=5,
+            value=1,
+            help="Use 1 for a single ad, or generate multiple variants with different angles.",
+        )
+
+        submitted = st.form_submit_button("✨ Generate & Save")
 
     if submitted:
-        if auto_generate:
-            gen = generate_ad_from_brief(offer_name, offer_type, audience, promise, hook_style)
-            headline = manual_headline.strip() or gen["headline"]
-            body = manual_body.strip() or gen["body"]
-            cta = manual_cta.strip() or gen["cta"]
+        if num_variants == 1:
+            # Single ad logic (similar to previous version)
+            if auto_generate:
+                gen = generate_ad_from_brief(offer_name, offer_type, audience, promise, hook_style)
+                headline = manual_headline.strip() or gen["headline"]
+                body = manual_body.strip() or gen["body"]
+                cta = manual_cta.strip() or gen["cta"]
+            else:
+                if not manual_headline or not manual_body:
+                    st.error("If auto-generate is off, please fill in both headline and body.")
+                    render_footer()
+                    return
+                headline = manual_headline.strip()
+                body = manual_body.strip()
+                cta = manual_cta.strip()
+
+            insert_ad(
+                program_id=chosen_program_id,
+                title=ad_title.strip(),
+                angle=hook_style.strip(),
+                headline=headline,
+                body=body,
+                call_to_action=cta,
+                placement_type=placement_type.strip(),
+                traffic_source=traffic_source.strip(),
+            )
+            st.success("Ad creative generated and saved.")
         else:
-            if not manual_headline or not manual_body:
-                st.error("If auto-generate is off, please fill in both headline and body.")
+            # Multi-variant generator
+            if not auto_generate:
+                st.error("Multiple variants require auto-generate to be enabled.")
                 render_footer()
                 return
-            headline = manual_headline.strip()
-            body = manual_body.strip()
-            cta = manual_cta.strip()
 
-        insert_ad(
-            program_id=chosen_program_id,
-            title=ad_title.strip(),
-            angle=hook_style.strip(),
-            headline=headline,
-            body=body,
-            call_to_action=cta,
-            placement_type=placement_type.strip(),
-        )
-        st.success("Ad creative generated and saved.")
-        st.experimental_rerun()
+            base_hooks = ["Curiosity", "Discreet / Privacy", "Limited-Time", "Audience-Focused"]
+
+            if hook_style == "Mix: Use multiple angles":
+                hooks_sequence = [base_hooks[i % len(base_hooks)] for i in range(num_variants)]
+            else:
+                hooks_sequence = [hook_style for _ in range(num_variants)]
+
+            for i, hs in enumerate(hooks_sequence, start=1):
+                gen = generate_ad_from_brief(offer_name, offer_type, audience, promise, hs)
+                headline = gen["headline"]
+                body = gen["body"]
+                cta = manual_cta.strip() or gen["cta"]
+
+                if hook_style == "Mix: Use multiple angles":
+                    title_variant = f"{ad_title.strip()} – {hs} v{i}"
+                else:
+                    title_variant = f"{ad_title.strip()} v{i}"
+
+                insert_ad(
+                    program_id=chosen_program_id,
+                    title=title_variant,
+                    angle=hs,
+                    headline=headline,
+                    body=body,
+                    call_to_action=cta,
+                    placement_type=placement_type.strip(),
+                    traffic_source=traffic_source.strip(),
+                )
+
+            st.success(f"{num_variants} ad variants generated and saved.")
 
     st.markdown("---")
     st.markdown("### Saved Ad Creatives")
@@ -662,6 +807,7 @@ def page_ad_builder():
             with st.expander(f"{ad['title']} · {ad['program_name'] or 'Unknown Program'}"):
                 st.write(f"**Program:** {ad['program_name']}")
                 st.write(f"**Placement:** {ad['placement_type']}")
+                st.write(f"**Traffic Source:** {ad['traffic_source'] or 'N/A'}")
                 st.write(f"**Angle:** {ad['angle']}")
                 st.markdown("**Headline:**")
                 st.markdown(f"> {ad['headline']}")
@@ -670,8 +816,12 @@ def page_ad_builder():
                 st.markdown("**CTA:**")
                 st.markdown(f"> {ad['call_to_action']}")
                 st.write(
-                    f"**Performance so far:** {perf.get('clicks', 0)} clicks · "
-                    f"{perf.get('leads', 0)} leads · {perf.get('sales', 0)} sales"
+                    f"**Performance so far:** "
+                    f"{perf.get('impressions', 0)} impressions · "
+                    f"{perf.get('clicks', 0)} clicks · "
+                    f"{perf.get('leads', 0)} leads · "
+                    f"{perf.get('sales', 0)} sales · "
+                    f"${perf.get('revenue', 0.0):.2f} revenue"
                 )
 
     render_footer()
@@ -681,8 +831,8 @@ def page_performance():
     render_header()
     st.subheader("📊 Performance Tracker")
     st.markdown(
-        "Log clicks, leads, and sales per ad creative so you can see what’s working "
-        "across networks and angles."
+        "Log impressions, clicks, leads, sales, and revenue per ad creative so you can see "
+        "what’s working by angle and traffic source."
     )
 
     ads = fetch_ads()
@@ -706,33 +856,140 @@ def page_performance():
 
     st.markdown("### Current Ad")
     st.write(f"**Program:** {chosen_ad['program_name']}")
+    st.write(f"**Traffic Source:** {chosen_ad['traffic_source'] or 'N/A'}")
     st.write(f"**Title:** {chosen_ad['title']}")
     st.write(f"**Headline:** {chosen_ad['headline']}")
 
     st.markdown("---")
     st.markdown("### Update Performance (Totals)")
 
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
-        clicks = st.number_input("Total Clicks", min_value=0, value=int(perf.get("clicks", 0)), step=1)
+        impressions = st.number_input(
+            "Impressions",
+            min_value=0,
+            value=int(perf.get("impressions", 0)),
+            step=1,
+        )
     with col2:
-        leads = st.number_input("Total Leads", min_value=0, value=int(perf.get("leads", 0)), step=1)
+        clicks = st.number_input(
+            "Clicks",
+            min_value=0,
+            value=int(perf.get("clicks", 0)),
+            step=1,
+        )
     with col3:
-        sales = st.number_input("Total Sales", min_value=0, value=int(perf.get("sales", 0)), step=1)
+        leads = st.number_input(
+            "Leads",
+            min_value=0,
+            value=int(perf.get("leads", 0)),
+            step=1,
+        )
+    with col4:
+        sales = st.number_input(
+            "Sales",
+            min_value=0,
+            value=int(perf.get("sales", 0)),
+            step=1,
+        )
+    with col5:
+        revenue = st.number_input(
+            "Revenue ($)",
+            min_value=0.0,
+            value=float(perf.get("revenue", 0.0)),
+            step=0.01,
+            format="%.2f",
+        )
 
     if st.button("💾 Save Metrics"):
-        update_performance(chosen_ad_id, clicks, leads, sales)
+        update_performance(chosen_ad_id, impressions, clicks, leads, sales, revenue)
         st.success("Performance updated.")
-        st.experimental_rerun()
 
     st.markdown("---")
-    st.markdown("### Overview Table")
+    st.markdown("### Per-Ad Overview")
 
     df = fetch_ads_with_metrics_df()
     if df.empty:
         st.info("No performance data yet.")
     else:
-        st.dataframe(df[["ad_id", "program_name", "title", "clicks", "leads", "sales"]])
+        df_show = df.copy().fillna(0)
+        df_show["CTR_%"] = df_show.apply(
+            lambda r: (r["clicks"] / r["impressions"] * 100) if r["impressions"] else 0.0,
+            axis=1,
+        )
+        df_show["CR_sales_%"] = df_show.apply(
+            lambda r: (r["sales"] / r["clicks"] * 100) if r["clicks"] else 0.0,
+            axis=1,
+        )
+        df_show["EPC"] = df_show.apply(
+            lambda r: (r["revenue"] / r["clicks"]) if r["clicks"] else 0.0,
+            axis=1,
+        )
+        st.dataframe(
+            df_show[
+                [
+                    "ad_id",
+                    "program_name",
+                    "traffic_source",
+                    "title",
+                    "impressions",
+                    "clicks",
+                    "leads",
+                    "sales",
+                    "revenue",
+                    "CTR_%",
+                    "CR_sales_%",
+                    "EPC",
+                ]
+            ]
+        )
+
+    st.markdown("---")
+    st.markdown("### Per-Network Summary (CTR, CR, EPC)")
+
+    if df.empty:
+        st.info("No data yet for network summaries.")
+    else:
+        df_net = df.copy().fillna(0)
+        df_net["traffic_source"] = df_net["traffic_source"].replace("", "Unknown")
+        grouped = df_net.groupby("traffic_source", dropna=False).agg(
+            impressions=("impressions", "sum"),
+            clicks=("clicks", "sum"),
+            leads=("leads", "sum"),
+            sales=("sales", "sum"),
+            revenue=("revenue", "sum"),
+        )
+        grouped = grouped.reset_index()
+
+        # Compute metrics
+        grouped["CTR_%"] = grouped.apply(
+            lambda r: (r["clicks"] / r["impressions"] * 100) if r["impressions"] else 0.0,
+            axis=1,
+        )
+        grouped["CR_sales_%"] = grouped.apply(
+            lambda r: (r["sales"] / r["clicks"] * 100) if r["clicks"] else 0.0,
+            axis=1,
+        )
+        grouped["EPC"] = grouped.apply(
+            lambda r: (r["revenue"] / r["clicks"]) if r["clicks"] else 0.0,
+            axis=1,
+        )
+
+        st.dataframe(
+            grouped[
+                [
+                    "traffic_source",
+                    "impressions",
+                    "clicks",
+                    "leads",
+                    "sales",
+                    "revenue",
+                    "CTR_%",
+                    "CR_sales_%",
+                    "EPC",
+                ]
+            ]
+        )
 
     render_footer()
 
@@ -748,8 +1005,6 @@ def page_export_copy():
     if not ads:
         st.info("No ads available yet. Create some on the Ad Builder page.")
     else:
-        programs_map = {ad["id"]: ad["program_name"] for ad in ads}
-
         ad_labels = [
             f"{ad['id']} – {ad['title']} ({ad['program_name'] or 'Unknown Program'})"
             for ad in ads
@@ -764,6 +1019,7 @@ def page_export_copy():
         st.markdown("### Selected Ad Creative")
         st.write(f"**Program:** {chosen_ad['program_name']}")
         st.write(f"**Placement:** {chosen_ad['placement_type']}")
+        st.write(f"**Traffic Source:** {chosen_ad['traffic_source'] or 'N/A'}")
         st.write(f"**Angle:** {chosen_ad['angle']}")
 
         block = textwrap.dedent(
@@ -863,4 +1119,5 @@ if __name__ == "__main__":
         login_page()
     else:
         main_app()
+
 
