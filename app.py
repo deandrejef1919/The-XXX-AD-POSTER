@@ -547,6 +547,7 @@ def page_dashboard():
                     <li><strong>Ad Creatives:</strong> Generate clean, non-explicit headlines and body copy.</li>
                     <li><strong>Performance:</strong> Log impressions, clicks, leads & sales to see what’s working.</li>
                     <li><strong>Export:</strong> Download CSVs of programs & ads for backup or sharing.</li>
+                    <li><strong>Links & Resources:</strong> Jump straight to signup pages for ad networks & affiliate programs.</li>
                 </ul>
             </div>
             """,
@@ -731,7 +732,7 @@ def page_ad_builder():
 
     if submitted:
         if num_variants == 1:
-            # Single ad logic (similar to previous version)
+            # Single ad logic
             if auto_generate:
                 gen = generate_ad_from_brief(offer_name, offer_type, audience, promise, hook_style)
                 headline = manual_headline.strip() or gen["headline"]
@@ -961,7 +962,6 @@ def page_performance():
         )
         grouped = grouped.reset_index()
 
-        # Compute metrics
         grouped["CTR_%"] = grouped.apply(
             lambda r: (r["clicks"] / r["impressions"] * 100) if r["impressions"] else 0.0,
             axis=1,
@@ -1074,6 +1074,71 @@ def page_export_copy():
     render_footer()
 
 
+def page_links_resources():
+    render_header()
+    st.subheader("🔗 Links & Resources – Signup Hubs")
+    st.markdown(
+        "Quick access to popular adult-friendly **ad networks** and **affiliate programs**. "
+        "Always review each platform’s terms, legal requirements, and age restrictions."
+    )
+
+    col1, col2 = st.columns(2)
+
+    # Ad Networks
+    with col1:
+        st.markdown("### 🚦 Adult Ad Networks")
+        st.markdown(
+            """
+- [ExoClick](https://www.exoclick.com/) – Large adult ad network for banners, native, pops.
+- [JuicyAds](https://juicyads.com/) – “Sexy advertising network” with many adult publishers.
+- [TrafficJunky](https://www.trafficjunky.com/) – Media buying for Pornhub network & partners.
+- [TrafficStars](https://trafficstars.com/) – SSP with adult tube, cam & site inventory.
+- [Adsterra](https://adsterra.com/) – Mainstream + adult-friendly formats (pops, push, banners).
+- [EroAdvertising](https://www.eroadvertising.com/) – Long-running adult-focused ad network.
+            """
+        )
+
+        st.markdown("### 🧪 Useful Tools (Tracking etc.)")
+        st.markdown(
+            """
+- [Voluum](https://voluum.com/) – Affiliate campaign tracker.
+- [BeMob](https://bemob.com/) – Tracker suitable for smaller budgets.
+- [Binom](https://binom.org/) – Self-hosted tracker (more advanced users).
+            """
+        )
+
+    # Affiliate Networks
+    with col2:
+        st.markdown("### 💰 Adult Affiliate Networks")
+        st.markdown(
+            """
+- [CrakRevenue](https://www.crakrevenue.com/) – Large adult network (dating, cams, toys).
+- [CPAMatica](https://cpamatica.io/) – Strong in adult dating offers.
+- [StripCash](https://stripcash.com/) – Affiliate program for Stripchat (cams).
+- [CherryCash](https://cherrycash.com/) – Adult streaming / platform offers.
+- [AdultFriendFinder Affiliate](https://www.affiliatefriendfinder.com/) – Adult dating offers.
+            """
+        )
+
+        st.markdown("### 🛒 Toys & Ecommerce Affiliate Programs")
+        st.markdown(
+            """
+- [Lovehoney Affiliates](https://www.lovehoneygroup.com/affiliates/) – Global sex toy brand.
+- [Adam & Eve Affiliate](https://www.adamandeve.com/affiliates) – Big U.S. adult store.
+- [EdenFantasys Affiliate](https://www.edenfantasys.com/affiliate/) – Online toy store program.
+- Check your main CPA network (e.g., CrakRevenue) for additional toy/ecom offers.
+            """
+        )
+
+    st.markdown("---")
+    st.info(
+        "Tip: when you sign up, add each network as a Program in the **Affiliate Programs** section, "
+        "with notes on payout model (CPA/RevShare/CPL) and any restrictions."
+    )
+
+    render_footer()
+
+
 # =========================
 # Sidebar & router
 # =========================
@@ -1087,7 +1152,14 @@ def main_app():
         st.markdown("**Navigation**")
         page = st.radio(
             "",
-            ["Dashboard", "Affiliate Programs", "Ad Builder", "Performance", "Export / Copy"],
+            [
+                "Dashboard",
+                "Affiliate Programs",
+                "Ad Builder",
+                "Performance",
+                "Export / Copy",
+                "Links & Resources",
+            ],
         )
 
         st.markdown("---")
@@ -1105,6 +1177,8 @@ def main_app():
         page_performance()
     elif page == "Export / Copy":
         page_export_copy()
+    elif page == "Links & Resources":
+        page_links_resources()
     else:
         page_dashboard()
 
@@ -1119,5 +1193,6 @@ if __name__ == "__main__":
         login_page()
     else:
         main_app()
+
 
 
