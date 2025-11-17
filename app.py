@@ -178,7 +178,7 @@ def init_db():
         """
     )
 
-    # Ads (with traffic_source)
+    # Ads (with traffic_source + campaign_notes)
     cur.execute(
         """
         CREATE TABLE IF NOT EXISTS ad_creatives (
@@ -191,6 +191,7 @@ def init_db():
             call_to_action TEXT,
             placement_type TEXT,
             traffic_source TEXT,
+            campaign_notes TEXT,
             FOREIGN KEY (program_id) REFERENCES affiliate_programs (id)
         )
         """
@@ -214,6 +215,7 @@ def init_db():
 
     # In case the DB was created with an older version, ensure new columns exist
     ensure_column(conn, "ad_creatives", "traffic_source", "TEXT")
+    ensure_column(conn, "ad_creatives", "campaign_notes", "TEXT")
     ensure_column(conn, "ad_performance", "impressions", "INTEGER DEFAULT 0")
     ensure_column(conn, "ad_performance", "revenue", "REAL DEFAULT 0.0")
 
@@ -278,6 +280,7 @@ def insert_ad(
     call_to_action,
     placement_type,
     traffic_source,
+    campaign_notes,
 ) -> int:
     conn = get_conn()
     cur = conn.cursor()
@@ -285,9 +288,9 @@ def insert_ad(
         """
         INSERT INTO ad_creatives (
             program_id, title, angle, headline, body,
-            call_to_action, placement_type, traffic_source
+            call_to_action, placement_type, traffic_source, campaign_notes
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             program_id,
@@ -298,6 +301,7 @@ def insert_ad(
             call_to_action,
             placement_type,
             traffic_source,
+            campaign_notes,
         ),
     )
     ad_id = cur.lastrowid
@@ -384,6 +388,7 @@ def fetch_ads_with_metrics_df() -> pd.DataFrame:
             a.call_to_action,
             a.placement_type,
             a.traffic_source,
+            a.campaign_notes,
             p.name AS program_name,
             perf.impressions,
             perf.clicks,
@@ -546,6 +551,7 @@ def page_dashboard():
                     <li><strong>Affiliate Programs:</strong> Track who you’ve applied with and who approved you.</li>
                     <li><strong>Ad Creatives:</strong> Generate clean, non-explicit headlines and body copy.</li>
                     <li><strong>Performance:</strong> Log impressions, clicks, leads & sales to see what’s working.</li>
+                    <li><strong>Campaign Notes:</strong> Save GEO, device, bid, and placement details per ad.</li>
                     <li><strong>Export:</strong> Download CSVs of programs & ads for backup or sharing.</li>
                     <li><strong>Links & Resources:</strong> Jump straight to signup pages for ad networks & affiliate programs.</li>
                 </ul>
@@ -720,6 +726,12 @@ def page_ad_builder():
 
         ad_title = st.text_input("Internal Ad Name / Label", "Main Angle – Mobile Banner")
 
+        campaign_notes = st.text_area(
+            "Campaign Notes (GEO, device, bid, placements, etc.)",
+            placeholder="e.g. US mobile only, SmartCPM $0.15, exclude in-video zones, evenings 6–11pm",
+            height=80,
+        )
+
         num_variants = st.slider(
             "How many variants from this brief?",
             min_value=1,
@@ -756,6 +768,7 @@ def page_ad_builder():
                 call_to_action=cta,
                 placement_type=placement_type.strip(),
                 traffic_source=traffic_source.strip(),
+                campaign_notes=campaign_notes.strip(),
             )
             st.success("Ad creative generated and saved.")
         else:
@@ -792,6 +805,7 @@ def page_ad_builder():
                     call_to_action=cta,
                     placement_type=placement_type.strip(),
                     traffic_source=traffic_source.strip(),
+                    campaign_notes=campaign_notes.strip(),
                 )
 
             st.success(f"{num_variants} ad variants generated and saved.")
@@ -810,6 +824,8 @@ def page_ad_builder():
                 st.write(f"**Placement:** {ad['placement_type']}")
                 st.write(f"**Traffic Source:** {ad['traffic_source'] or 'N/A'}")
                 st.write(f"**Angle:** {ad['angle']}")
+                if ad["campaign_notes"]:
+                    st.write(f"**Campaign Notes:** {ad['campaign_notes']}")
                 st.markdown("**Headline:**")
                 st.markdown(f"> {ad['headline']}")
                 st.markdown("**Body:**")
@@ -859,6 +875,8 @@ def page_performance():
     st.write(f"**Program:** {chosen_ad['program_name']}")
     st.write(f"**Traffic Source:** {chosen_ad['traffic_source'] or 'N/A'}")
     st.write(f"**Title:** {chosen_ad['title']}")
+    if chosen_ad["campaign_notes"]:
+        st.write(f"**Campaign Notes:** {chosen_ad['campaign_notes']}")
     st.write(f"**Headline:** {chosen_ad['headline']}")
 
     st.markdown("---")
@@ -933,6 +951,7 @@ def page_performance():
                     "program_name",
                     "traffic_source",
                     "title",
+                    "campaign_notes",
                     "impressions",
                     "clicks",
                     "leads",
@@ -1020,11 +1039,17 @@ def page_export_copy():
         st.write(f"**Program:** {chosen_ad['program_name']}")
         st.write(f"**Placement:** {chosen_ad['placement_type']}")
         st.write(f"**Traffic Source:** {chosen_ad['traffic_source'] or 'N/A'}")
+        if chosen_ad["campaign_notes"]:
+            st.write(f"**Campaign Notes:** {chosen_ad['campaign_notes']}")
         st.write(f"**Angle:** {chosen_ad['angle']}")
 
         block = textwrap.dedent(
             f"""
             [{chosen_ad['program_name']}] – {chosen_ad['title']}
+
+            TRAFFIC / CAMPAIGN:
+            Source: {chosen_ad['traffic_source'] or 'N/A'}
+            Notes: {chosen_ad['campaign_notes'] or 'n/a'}
 
             HEADLINE:
             {chosen_ad['headline']}
@@ -1037,7 +1062,7 @@ def page_export_copy():
             """
         ).strip()
 
-        st.text_area("Copy-ready block", block, height=200)
+        st.text_area("Copy-ready block", block, height=260)
         st.info("Select all and copy this block into your traffic source or ad manager.")
 
     st.markdown("---")
