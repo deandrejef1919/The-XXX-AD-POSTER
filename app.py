@@ -1,9 +1,11 @@
 import sqlite3
 import textwrap
+import json
 from typing import Dict, List
 
 import pandas as pd
 import streamlit as st
+import requests
 
 # =========================
 # Page config & base styles
@@ -213,7 +215,7 @@ def init_db():
         """
     )
 
-    # In case the DB was created with an older version, ensure new columns exist
+    # Ensure new columns exist if DB is older
     ensure_column(conn, "ad_creatives", "traffic_source", "TEXT")
     ensure_column(conn, "ad_creatives", "campaign_notes", "TEXT")
     ensure_column(conn, "ad_performance", "impressions", "INTEGER DEFAULT 0")
@@ -413,6 +415,9 @@ def fetch_ads_with_metrics_df() -> pd.DataFrame:
 if "auth_ok" not in st.session_state:
     st.session_state["auth_ok"] = False
 
+if "zapier_webhook_url" not in st.session_state:
+    st.session_state["zapier_webhook_url"] = ""
+
 
 # =========================
 # UI Helpers
@@ -459,7 +464,6 @@ def login_page():
     password = st.text_input("Password", type="password")
 
     if st.button("Log In"):
-        # simple demo auth – change via Streamlit secrets on deployment
         admin_user = st.secrets.get("ADMIN_USERNAME", "admin")
         admin_pw = st.secrets.get("ADMIN_PASSWORD", "xxx-poster")
 
@@ -475,7 +479,31 @@ def login_page():
 
 
 # =========================
-# Ad text generator
+# Zapier helper
+# =========================
+
+def trigger_zap(event_name: str, payload: Dict):
+    """
+    Send a JSON payload to a Zapier Catch Hook.
+
+    Priority:
+    1) st.secrets["ZAPIER_WEBHOOK_URL"]
+    2) st.session_state["zapier_webhook_url"]
+    """
+    url = st.secrets.get("ZAPIER_WEBHOOK_URL") or st.session_state.get(
+        "zapier_webhook_url", ""
+    )
+    if not url:
+        return
+    data = {"event": event_name, **payload}
+    try:
+        requests.post(url, json=data, timeout=3)
+    except Exception as e:
+        st.warning(f"Zapier webhook error: {e}")
+
+
+# =========================
+# Ad text generator (local)
 # =========================
 
 def generate_ad_from_brief(
@@ -532,6 +560,147 @@ def generate_ad_from_brief(
 
 
 # =========================
+# AI-powered generator
+# =========================
+
+def generate_ad_with_ai(
+    provider: str,
+    offer_name: str,
+    offer_type: str,
+    audience: str,
+    promise: str,
+    hook_style: str,
+) -> Dict[str, str]:
+    """
+    Use OpenAI / Claude / Gemini if keys are configured.
+    Falls back to local generator if anything fails.
+    """
+    base = generate_ad_from_brief(offer_name, offer_type, audience, promise, hook_style)
+
+    if provider == "Built-in (no API)":
+        return base
+
+    brief = f"""
+You are an experienced adult affiliate copywriter. Write a short, non-explicit ad
+for an adult offer. Focus on benefits, privacy, and discretion. NO explicit words.
+
+Offer name: {offer_name}
+Offer type: {offer_type}
+Audience: {audience}
+Main promise: {promise}
+Hook style: {hook_style}
+
+Return ONLY valid JSON with keys: headline, body, cta.
+"""
+
+    try:
+        if provider == "OpenAI":
+            api_key = st.secrets.get("OPENAI_API_KEY")
+            if not api_key:
+                return base
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            }
+            payload = {
+                "model": "gpt-4.1-mini",
+                "messages": [
+                    {"role": "system", "content": "You write short, clean ad copy."},
+                    {"role": "user", "content": brief.strip()},
+                ],
+                "temperature": 0.7,
+            }
+            resp = requests.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers=headers,
+                json=payload,
+                timeout=15,
+            )
+            data = resp.json()
+            content = data["choices"][0]["message"]["content"]
+            parsed = json.loads(content)
+            return {
+                "headline": parsed.get("headline", base["headline"]),
+                "body": parsed.get("body", base["body"]),
+                "cta": parsed.get("cta", base["cta"]),
+            }
+
+        elif provider == "Claude (Anthropic)":
+            api_key = st.secrets.get("ANTHROPIC_API_KEY")
+            if not api_key:
+                return base
+            headers = {
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            }
+            payload = {
+                "model": "claude-3-haiku-20240307",
+                "max_tokens": 400,
+                "messages": [
+                    {"role": "user", "content": brief.strip()},
+                ],
+            }
+            resp = requests.post(
+                "https://api.anthropic.com/v1/messages",
+                headers=headers,
+                json=payload,
+                timeout=20,
+            )
+            data = resp.json()
+            text_blocks = [
+                block.get("text", "")
+                for block in data.get("content", [])
+                if block.get("type") == "text"
+            ]
+            content = "".join(text_blocks)
+            parsed = json.loads(content)
+            return {
+                "headline": parsed.get("headline", base["headline"]),
+                "body": parsed.get("body", base["body"]),
+                "cta": parsed.get("cta", base["cta"]),
+            }
+
+        elif provider == "Gemini":
+            api_key = st.secrets.get("GEMINI_API_KEY")
+            if not api_key:
+                return base
+            url = (
+                "https://generativelanguage.googleapis.com/v1beta/"
+                "models/gemini-1.5-flash:generateContent"
+            )
+            params = {"key": api_key}
+            payload = {
+                "contents": [
+                    {
+                        "parts": [
+                            {"text": brief.strip()}
+                        ]
+                    }
+                ]
+            }
+            resp = requests.post(url, params=params, json=payload, timeout=20)
+            data = resp.json()
+            text = (
+                data.get("candidates", [{}])[0]
+                .get("content", {})
+                .get("parts", [{}])[0]
+                .get("text", "")
+            )
+            parsed = json.loads(text)
+            return {
+                "headline": parsed.get("headline", base["headline"]),
+                "body": parsed.get("body", base["body"]),
+                "cta": parsed.get("cta", base["cta"]),
+            }
+        else:
+            return base
+    except Exception as e:
+        st.warning(f"AI generation failed ({provider}): {e}")
+        return base
+
+
+# =========================
 # Pages
 # =========================
 
@@ -549,11 +718,13 @@ def page_dashboard():
                 </p>
                 <ul>
                     <li><strong>Affiliate Programs:</strong> Track who you’ve applied with and who approved you.</li>
-                    <li><strong>Ad Creatives:</strong> Generate clean, non-explicit headlines and body copy.</li>
+                    <li><strong>Ad Creatives:</strong> Generate clean, non-explicit headlines and body copy (with AI if you like).</li>
+                    <li><strong>A/B Split Tester:</strong> Compare ads by CTR, CR, and EPC per traffic source.</li>
                     <li><strong>Performance:</strong> Log impressions, clicks, leads & sales to see what’s working.</li>
                     <li><strong>Campaign Notes:</strong> Save GEO, device, bid, and placement details per ad.</li>
-                    <li><strong>Export:</strong> Download CSVs of programs & ads for backup or sharing.</li>
-                    <li><strong>Links & Resources:</strong> Jump straight to signup pages for ad networks & affiliate programs.</li>
+                    <li><strong>Zapier:</strong> Fire webhooks on new ads and metric updates.</li>
+                    <li><strong>Strategy:</strong> Step-by-step GEO & vertical roadmap for Toys, Dating & Cams.</li>
+                    <li><strong>Links & Resources:</strong> Signup shortcuts for ad networks & affiliate programs.</li>
                 </ul>
             </div>
             """,
@@ -718,6 +889,12 @@ def page_ad_builder():
             index=1,
         )
 
+        ai_provider = st.selectbox(
+            "AI Engine for Copy",
+            ["Built-in (no API)", "OpenAI", "Claude (Anthropic)", "Gemini"],
+            help="Built-in requires no keys. The others need API keys in Streamlit secrets.",
+        )
+
         auto_generate = st.checkbox("Auto-generate copy from this brief", value=True)
 
         manual_headline = st.text_input("Headline (optional, overrides auto for single ad)")
@@ -744,9 +921,11 @@ def page_ad_builder():
 
     if submitted:
         if num_variants == 1:
-            # Single ad logic
+            # Single ad
             if auto_generate:
-                gen = generate_ad_from_brief(offer_name, offer_type, audience, promise, hook_style)
+                gen = generate_ad_with_ai(
+                    ai_provider, offer_name, offer_type, audience, promise, hook_style
+                )
                 headline = manual_headline.strip() or gen["headline"]
                 body = manual_body.strip() or gen["body"]
                 cta = manual_cta.strip() or gen["cta"]
@@ -759,7 +938,7 @@ def page_ad_builder():
                 body = manual_body.strip()
                 cta = manual_cta.strip()
 
-            insert_ad(
+            ad_id = insert_ad(
                 program_id=chosen_program_id,
                 title=ad_title.strip(),
                 angle=hook_style.strip(),
@@ -769,6 +948,15 @@ def page_ad_builder():
                 placement_type=placement_type.strip(),
                 traffic_source=traffic_source.strip(),
                 campaign_notes=campaign_notes.strip(),
+            )
+            trigger_zap(
+                "new_ad_created",
+                {
+                    "ad_id": ad_id,
+                    "program_id": chosen_program_id,
+                    "title": ad_title.strip(),
+                    "traffic_source": traffic_source.strip(),
+                },
             )
             st.success("Ad creative generated and saved.")
         else:
@@ -785,8 +973,11 @@ def page_ad_builder():
             else:
                 hooks_sequence = [hook_style for _ in range(num_variants)]
 
+            created_ids = []
             for i, hs in enumerate(hooks_sequence, start=1):
-                gen = generate_ad_from_brief(offer_name, offer_type, audience, promise, hs)
+                gen = generate_ad_with_ai(
+                    ai_provider, offer_name, offer_type, audience, promise, hs
+                )
                 headline = gen["headline"]
                 body = gen["body"]
                 cta = manual_cta.strip() or gen["cta"]
@@ -796,7 +987,7 @@ def page_ad_builder():
                 else:
                     title_variant = f"{ad_title.strip()} v{i}"
 
-                insert_ad(
+                ad_id = insert_ad(
                     program_id=chosen_program_id,
                     title=title_variant,
                     angle=hs,
@@ -807,7 +998,17 @@ def page_ad_builder():
                     traffic_source=traffic_source.strip(),
                     campaign_notes=campaign_notes.strip(),
                 )
+                created_ids.append(ad_id)
 
+            trigger_zap(
+                "bulk_ads_created",
+                {
+                    "program_id": chosen_program_id,
+                    "count": len(created_ids),
+                    "traffic_source": traffic_source.strip(),
+                    "ad_ids": created_ids,
+                },
+            )
             st.success(f"{num_variants} ad variants generated and saved.")
 
     st.markdown("---")
@@ -922,6 +1123,17 @@ def page_performance():
 
     if st.button("💾 Save Metrics"):
         update_performance(chosen_ad_id, impressions, clicks, leads, sales, revenue)
+        trigger_zap(
+            "performance_updated",
+            {
+                "ad_id": chosen_ad_id,
+                "impressions": impressions,
+                "clicks": clicks,
+                "leads": leads,
+                "sales": sales,
+                "revenue": revenue,
+            },
+        )
         st.success("Performance updated.")
 
     st.markdown("---")
@@ -1009,6 +1221,111 @@ def page_performance():
                 ]
             ]
         )
+
+    render_footer()
+
+
+def page_ab_split():
+    render_header()
+    st.subheader("🧪 A/B Split Tester")
+    st.markdown(
+        "Use this to compare multiple creatives on **CTR, CR and EPC**.\n\n"
+        "You still run traffic in the ad network — this is your analysis board "
+        "to see which IDs are actually winning."
+    )
+
+    df = fetch_ads_with_metrics_df()
+    if df.empty:
+        st.info("No ads or metrics yet. Create ads and log performance first.")
+        render_footer()
+        return
+
+    df = df.fillna(0)
+
+    programs = fetch_programs()
+    program_filter = st.selectbox(
+        "Filter by Program",
+        ["All programs"] + [p["name"] for p in programs],
+    )
+
+    if program_filter != "All programs":
+        df = df[df["program_name"] == program_filter]
+
+    traffic_sources = ["All sources"] + sorted(list(set(df["traffic_source"].fillna("Unknown"))))
+    src_filter = st.selectbox("Filter by Traffic Source", traffic_sources)
+    if src_filter != "All sources":
+        df = df[df["traffic_source"] == src_filter]
+
+    ad_options = [
+        f"{row.ad_id} – {row.title} ({row.program_name or 'Unknown'})"
+        for _, row in df.iterrows()
+    ]
+    selected_labels = st.multiselect(
+        "Select 2–6 ads to compare",
+        ad_options,
+    )
+    selected_ids = []
+    for label in selected_labels:
+        ad_id = int(label.split("–")[0].strip())
+        selected_ids.append(ad_id)
+
+    if len(selected_ids) < 2:
+        st.info("Pick at least 2 ads to run a comparison.")
+        render_footer()
+        return
+
+    metric_choice = st.selectbox(
+        "Primary KPI",
+        ["CTR_%", "CR_sales_%", "EPC"],
+        help="CTR = clicks/impressions; CR = sales/clicks; EPC = revenue/click.",
+    )
+
+    df_sel = df[df["ad_id"].isin(selected_ids)].copy()
+    df_sel["CTR_%"] = df_sel.apply(
+        lambda r: (r["clicks"] / r["impressions"] * 100) if r["impressions"] else 0.0,
+        axis=1,
+    )
+    df_sel["CR_sales_%"] = df_sel.apply(
+        lambda r: (r["sales"] / r["clicks"] * 100) if r["clicks"] else 0.0,
+        axis=1,
+    )
+    df_sel["EPC"] = df_sel.apply(
+        lambda r: (r["revenue"] / r["clicks"]) if r["clicks"] else 0.0,
+        axis=1,
+    )
+
+    if not df_sel.empty:
+        winner_idx = df_sel[metric_choice].idxmax()
+        winner_row = df_sel.loc[winner_idx]
+        st.success(
+            f"🏆 Current winner on **{metric_choice}**: "
+            f"Ad #{int(winner_row['ad_id'])} – {winner_row['title']}"
+        )
+
+    st.markdown("### Comparison Table")
+    st.dataframe(
+        df_sel[
+            [
+                "ad_id",
+                "program_name",
+                "traffic_source",
+                "title",
+                "impressions",
+                "clicks",
+                "leads",
+                "sales",
+                "revenue",
+                "CTR_%",
+                "CR_sales_%",
+                "EPC",
+            ]
+        ]
+    )
+
+    st.info(
+        "Tip: You can treat the top 1–2 winners as your **‘keep scaling’** group and "
+        "pause the others in the ad network UI."
+    )
 
     render_footer()
 
@@ -1109,7 +1426,6 @@ def page_links_resources():
 
     col1, col2 = st.columns(2)
 
-    # Ad Networks
     with col1:
         st.markdown("### 🚦 Adult Ad Networks")
         st.markdown(
@@ -1132,7 +1448,6 @@ def page_links_resources():
             """
         )
 
-    # Affiliate Networks
     with col2:
         st.markdown("### 💰 Adult Affiliate Networks")
         st.markdown(
@@ -1164,60 +1479,53 @@ def page_links_resources():
     render_footer()
 
 
-# =========================
-# Sidebar & router
-# =========================
+def page_integrations():
+    render_header()
+    st.subheader("⚙️ Integrations – AI & Zapier")
+    st.markdown(
+        "Configure optional integrations. None of this is required: the app works fine "
+        "with the built-in generator and without webhooks."
+    )
 
-def main_app():
-    with st.sidebar:
-        st.markdown(
-            '<div class="sidebar-logo">THE XXX AD POSTER</div>',
-            unsafe_allow_html=True,
-        )
-        st.markdown("**Navigation**")
-        page = st.radio(
-            "",
-            [
-                "Dashboard",
-                "Affiliate Programs",
-                "Ad Builder",
-                "Performance",
-                "Export / Copy",
-                "Links & Resources",
-            ],
-        )
+    st.markdown("### 🔄 Zapier Webhook")
+    st.markdown(
+        "You can fire a Zapier **Catch Hook** whenever:\n"
+        "- a new ad is created\n"
+        "- performance metrics are updated\n\n"
+        "Set the URL here, or store it as `ZAPIER_WEBHOOK_URL` in Streamlit secrets."
+    )
 
-        st.markdown("---")
-        if st.button("Log Out"):
-            st.session_state["auth_ok"] = False
-            st.experimental_rerun()
+    zap_url = st.text_input(
+        "Zapier Catch Hook URL",
+        value=st.session_state.get("zapier_webhook_url", ""),
+        placeholder="https://hooks.zapier.com/hooks/catch/XXXX/YYYY",
+    )
+    if st.button("Save Zapier URL"):
+        st.session_state["zapier_webhook_url"] = zap_url.strip()
+        st.success("Zapier URL saved in session (for long-term, add it to Streamlit secrets).")
 
-    if page == "Dashboard":
-        page_dashboard()
-    elif page == "Affiliate Programs":
-        page_affiliate_programs()
-    elif page == "Ad Builder":
-        page_ad_builder()
-    elif page == "Performance":
-        page_performance()
-    elif page == "Export / Copy":
-        page_export_copy()
-    elif page == "Links & Resources":
-        page_links_resources()
-    else:
-        page_dashboard()
+    test_payload = {"message": "test_ping_from_xxx_ad_poster"}
+    if st.button("Test Zapier Webhook"):
+        trigger_zap("test_ping", test_payload)
+        st.info("Test event sent. Check your Zap history in Zapier.")
 
+    st.markdown("---")
+    st.markdown("### 🤖 AI APIs for Copy")
 
-# =========================
-# Entry point
-# =========================
+    st.markdown(
+        """
+The **Ad Builder** can optionally use external AI for ad copy:
 
-if __name__ == "__main__":
-    init_db()
-    if not st.session_state.get("auth_ok", False):
-        login_page()
-    else:
-        main_app()
+- **OpenAI** (GPT-style)
+- **Claude (Anthropic)**
+- **Gemini** (Google)
+
+To enable them, set these in Streamlit secrets (`.streamlit/secrets.toml`):
+
+```toml
+OPENAI_API_KEY = "sk-..."
+ANTHROPIC_API_KEY = "your_anthropic_key"
+GEMINI_API_KEY = "your_gemini_key"
 
 
 
