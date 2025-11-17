@@ -580,7 +580,7 @@ def generate_ad_with_ai(
     if provider == "Built-in (no API)":
         return base
 
-    brief = f"""
+    brief = f'''
 You are an experienced adult affiliate copywriter. Write a short, non-explicit ad
 for an adult offer. Focus on benefits, privacy, and discretion. NO explicit words.
 
@@ -591,7 +591,7 @@ Main promise: {promise}
 Hook style: {hook_style}
 
 Return ONLY valid JSON with keys: headline, body, cta.
-"""
+'''
 
     try:
         if provider == "OpenAI":
@@ -1257,7 +1257,7 @@ def page_ab_split():
         df = df[df["traffic_source"] == src_filter]
 
     ad_options = [
-        f"{row.ad_id} – {row.title} ({row.program_name or 'Unknown'})"
+        f"{int(row.ad_id)} – {row.title} ({row.program_name or 'Unknown'})"
         for _, row in df.iterrows()
     ]
     selected_labels = st.multiselect(
@@ -1387,31 +1387,29 @@ def page_export_copy():
 
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("⬇️ Download Programs CSV"):
-            df_prog = fetch_programs_df()
-            if df_prog.empty:
-                st.warning("No programs to export yet.")
-            else:
-                csv = df_prog.to_csv(index=False).encode("utf-8")
-                st.download_button(
-                    label="Save Programs CSV",
-                    data=csv,
-                    file_name="xxx_affiliate_programs.csv",
-                    mime="text/csv",
-                )
+        df_prog = fetch_programs_df()
+        if df_prog.empty:
+            st.write("No programs to export yet.")
+        else:
+            csv_prog = df_prog.to_csv(index=False).encode("utf-8")
+            st.download_button(
+                label="⬇️ Download Programs CSV",
+                data=csv_prog,
+                file_name="xxx_affiliate_programs.csv",
+                mime="text/csv",
+            )
     with col2:
-        if st.button("⬇️ Download Ads + Metrics CSV"):
-            df_ads = fetch_ads_with_metrics_df()
-            if df_ads.empty:
-                st.warning("No ads / metrics to export yet.")
-            else:
-                csv = df_ads.to_csv(index=False).encode("utf-8")
-                st.download_button(
-                    label="Save Ads & Metrics CSV",
-                    data=csv,
-                    file_name="xxx_ads_with_performance.csv",
-                    mime="text/csv",
-                )
+        df_ads = fetch_ads_with_metrics_df()
+        if df_ads.empty:
+            st.write("No ads / metrics to export yet.")
+        else:
+            csv_ads = df_ads.to_csv(index=False).encode("utf-8")
+            st.download_button(
+                label="⬇️ Download Ads & Metrics CSV",
+                data=csv_ads,
+                file_name="xxx_ads_with_performance.csv",
+                mime="text/csv",
+            )
 
     render_footer()
 
@@ -1430,21 +1428,21 @@ def page_links_resources():
         st.markdown("### 🚦 Adult Ad Networks")
         st.markdown(
             """
-- [ExoClick](https://www.exoclick.com/) – Large adult ad network for banners, native, pops.
-- [JuicyAds](https://juicyads.com/) – “Sexy advertising network” with many adult publishers.
-- [TrafficJunky](https://www.trafficjunky.com/) – Media buying for Pornhub network & partners.
-- [TrafficStars](https://trafficstars.com/) – SSP with adult tube, cam & site inventory.
-- [Adsterra](https://adsterra.com/) – Mainstream + adult-friendly formats (pops, push, banners).
-- [EroAdvertising](https://www.eroadvertising.com/) – Long-running adult-focused ad network.
+- ExoClick – https://www.exoclick.com/
+- JuicyAds – https://juicyads.com/
+- TrafficJunky – https://www.trafficjunky.com/
+- TrafficStars – https://trafficstars.com/
+- Adsterra – https://adsterra.com/
+- EroAdvertising – https://www.eroadvertising.com/
             """
         )
 
         st.markdown("### 🧪 Useful Tools (Tracking etc.)")
         st.markdown(
             """
-- [Voluum](https://voluum.com/) – Affiliate campaign tracker.
-- [BeMob](https://bemob.com/) – Tracker suitable for smaller budgets.
-- [Binom](https://binom.org/) – Self-hosted tracker (more advanced users).
+- Voluum – https://voluum.com/
+- BeMob – https://bemob.com/
+- Binom – https://binom.org/
             """
         )
 
@@ -1452,21 +1450,20 @@ def page_links_resources():
         st.markdown("### 💰 Adult Affiliate Networks")
         st.markdown(
             """
-- [CrakRevenue](https://www.crakrevenue.com/) – Large adult network (dating, cams, toys).
-- [CPAMatica](https://cpamatica.io/) – Strong in adult dating offers.
-- [StripCash](https://stripcash.com/) – Affiliate program for Stripchat (cams).
-- [CherryCash](https://cherrycash.com/) – Adult streaming / platform offers.
-- [AdultFriendFinder Affiliate](https://www.affiliatefriendfinder.com/) – Adult dating offers.
+- CrakRevenue – https://www.crakrevenue.com/
+- CPAMatica – https://cpamatica.io/
+- StripCash – https://stripcash.com/
+- CherryCash – https://cherrycash.com/
+- AdultFriendFinder Affiliates – https://www.affiliatefriendfinder.com/
             """
         )
 
         st.markdown("### 🛒 Toys & Ecommerce Affiliate Programs")
         st.markdown(
             """
-- [Lovehoney Affiliates](https://www.lovehoneygroup.com/affiliates/) – Global sex toy brand.
-- [Adam & Eve Affiliate](https://www.adamandeve.com/affiliates) – Big U.S. adult store.
-- [EdenFantasys Affiliate](https://www.edenfantasys.com/affiliate/) – Online toy store program.
-- Check your main CPA network (e.g., CrakRevenue) for additional toy/ecom offers.
+- Lovehoney Affiliates – https://www.lovehoneygroup.com/affiliates/
+- Adam & Eve Affiliate – https://www.adamandeve.com/affiliates
+- EdenFantasys Affiliate – https://www.edenfantasys.com/affiliate/
             """
         )
 
@@ -1483,13 +1480,13 @@ def page_integrations():
     render_header()
     st.subheader("⚙️ Integrations – AI & Zapier")
     st.markdown(
-        "Configure optional integrations. None of this is required: the app works fine "
-        "with the built-in generator and without webhooks."
+        "Configure optional integrations. The app works fine with the built-in generator "
+        "and without webhooks if you prefer to keep it simple."
     )
 
     st.markdown("### 🔄 Zapier Webhook")
     st.markdown(
-        "You can fire a Zapier **Catch Hook** whenever:\n"
+        "You can fire a Zapier Catch Hook whenever:\n"
         "- a new ad is created\n"
         "- performance metrics are updated\n\n"
         "Set the URL here, or store it as `ZAPIER_WEBHOOK_URL` in Streamlit secrets."
@@ -1504,28 +1501,207 @@ def page_integrations():
         st.session_state["zapier_webhook_url"] = zap_url.strip()
         st.success("Zapier URL saved in session (for long-term, add it to Streamlit secrets).")
 
-    test_payload = {"message": "test_ping_from_xxx_ad_poster"}
     if st.button("Test Zapier Webhook"):
-        trigger_zap("test_ping", test_payload)
+        trigger_zap("test_ping", {"message": "test_ping_from_xxx_ad_poster"})
         st.info("Test event sent. Check your Zap history in Zapier.")
 
     st.markdown("---")
     st.markdown("### 🤖 AI APIs for Copy")
 
     st.markdown(
+        "The Ad Builder can optionally use external AI for copy:\n\n"
+        "- OpenAI\n"
+        "- Claude (Anthropic)\n"
+        "- Gemini (Google)\n\n"
+        "Add these keys to your Streamlit secrets (secrets.toml):\n"
+        "- OPENAI_API_KEY\n"
+        "- ANTHROPIC_API_KEY\n"
+        "- GEMINI_API_KEY\n\n"
+        "Then in the Ad Builder, choose your engine. If anything fails or a key is missing, "
+        "the app falls back to the built-in generator."
+    )
+
+    render_footer()
+
+
+def page_strategy():
+    render_header()
+    st.subheader("🧠 Strategy: GEOs, Verticals & Payouts")
+    st.markdown(
+        "This tab is your quick-reference playbook for Toys, Dating and Cams across "
+        "English-speaking markets."
+    )
+
+    # Toys
+    st.markdown("### 1️⃣ Toys & Sexual Wellness – Main Vertical")
+    st.markdown(
         """
-The **Ad Builder** can optionally use external AI for ad copy:
+Primary GEOs for toys:
 
-- **OpenAI** (GPT-style)
-- **Claude (Anthropic)**
-- **Gemini** (Google)
+- 🇺🇸 United States
+- 🇬🇧 United Kingdom
+- 🇨🇦 Canada
+- 🇦🇺 Australia
 
-To enable them, set these in Streamlit secrets (`.streamlit/secrets.toml`):
+Why start here:
 
-```toml
-OPENAI_API_KEY = "sk-..."
-ANTHROPIC_API_KEY = "your_anthropic_key"
-GEMINI_API_KEY = "your_gemini_key"
+- Sex-toy market is huge and growing.
+- Easier to stay inside payment/legal rules vs hardcore content.
+- Works great with banner and native traffic.
+"""
+    )
+    st.markdown(
+        """
+Suggested stack:
+
+- Offers: Lovehoney, Adam & Eve, EdenFantasys, plus toy/ecom offers from big networks.
+- Traffic: ExoClick, JuicyAds, TrafficStars, Adsterra.
+- Payout: CPA (typical $25–$50+ per sale).
+"""
+    )
+
+    # Dating
+    st.markdown("### 2️⃣ Adult Dating – High EPC, Higher Costs")
+    st.markdown(
+        """
+Best starter GEOs:
+
+- 🇺🇸 US
+- 🇬🇧 UK
+
+Then expand to:
+
+- 🇨🇦 CA
+- 🇦🇺 AU
+
+Strategy:
+
+- Use CPL (email submit / signup) to start – easier conversions, faster feedback.
+- Warm traffic with quizzes, “are you their type?”, personality prelanders.
+- Test Tier-2 English GEOs for cheaper clicks once funnel is converting.
+"""
+    )
+
+    # Cams
+    st.markdown("### 3️⃣ Cams / Live Streaming – Backend Money")
+    st.markdown(
+        """
+Core GEOs:
+
+- 🇺🇸 US
+- 🇬🇧 UK
+- 🇨🇦 CA
+- 🇦🇺 AU
+
+Payout:
+
+- Rev-share for long-term whale value.
+- Hybrid (small CPA + rev-share) for a mix of upfront + backend.
+
+Offers:
+
+- StripCash (Stripchat)
+- Chaturbate
+- BongaCash
+- LiveJasmin / AWEmpire
+"""
+    )
+
+    # Payout summary
+    st.markdown("### 4️⃣ Payout Cheat-Sheet")
+    st.table(
+        pd.DataFrame(
+            [
+                ["Toys", "Rare", "⭐ Best", "OK", "CPA"],
+                ["Dating", "⭐ Best starter", "⚠️ Risky", "Slow", "CPL"],
+                ["Cams", "Easy but low", "Good", "⭐ Highest lifetime", "Rev-Share / Hybrid"],
+            ],
+            columns=["Vertical", "CPL", "CPA", "Rev-Share", "You Should Choose"],
+        )
+    )
+
+    st.markdown(
+        """
+Quick decisions:
+
+- TOYS → use **CPA**
+- DATING → start with **CPL**
+- CAMS → lean on **Rev-Share** (or hybrid Rev+CPA)
+
+This combo gives you:
+
+- Fast daily cashflow (CPL + CPA)
+- Mid-term ROI (CPA toys)
+- Long-term passive income (cam rev-share)
+"""
+    )
+
+    render_footer()
+
+
+# =========================
+# Sidebar & router
+# =========================
+
+def main_app():
+    with st.sidebar:
+        st.markdown(
+            '<div class="sidebar-logo">THE XXX AD POSTER</div>',
+            unsafe_allow_html=True,
+        )
+        st.markdown("**Navigation**")
+        page = st.radio(
+            "",
+            [
+                "Dashboard",
+                "Affiliate Programs",
+                "Ad Builder",
+                "Performance",
+                "A/B Split Tester",
+                "Export / Copy",
+                "Strategy",
+                "Links & Resources",
+                "Integrations",
+            ],
+        )
+
+        st.markdown("---")
+        if st.button("Log Out"):
+            st.session_state["auth_ok"] = False
+            st.experimental_rerun()
+
+    if page == "Dashboard":
+        page_dashboard()
+    elif page == "Affiliate Programs":
+        page_affiliate_programs()
+    elif page == "Ad Builder":
+        page_ad_builder()
+    elif page == "Performance":
+        page_performance()
+    elif page == "A/B Split Tester":
+        page_ab_split()
+    elif page == "Export / Copy":
+        page_export_copy()
+    elif page == "Strategy":
+        page_strategy()
+    elif page == "Links & Resources":
+        page_links_resources()
+    elif page == "Integrations":
+        page_integrations()
+    else:
+        page_dashboard()
+
+
+# =========================
+# Entry point
+# =========================
+
+if __name__ == "__main__":
+    init_db()
+    if not st.session_state.get("auth_ok", False):
+        login_page()
+    else:
+        main_app()
 
 
 
