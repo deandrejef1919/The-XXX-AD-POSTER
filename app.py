@@ -1,3 +1,4 @@
+
 import sqlite3
 import textwrap
 import json
@@ -137,6 +138,18 @@ div.stButton > button:hover {
 </style>
 """
 st.markdown(APP_CSS, unsafe_allow_html=True)
+
+
+# =========================
+# Helper: safe rerun
+# =========================
+
+def safe_rerun():
+    """Compatible rerun for older/newer Streamlit versions."""
+    if hasattr(st, "rerun"):
+        st.rerun()
+    elif hasattr(st, "experimental_rerun"):
+        st.experimental_rerun()
 
 
 # =========================
@@ -470,7 +483,7 @@ def login_page():
         if username == admin_user and password == admin_pw:
             st.session_state["auth_ok"] = True
             st.success("Access granted. Loading THE XXX AD POSTER…")
-            st.experimental_rerun()
+            safe_rerun()
         else:
             st.error("Invalid credentials.")
 
@@ -813,7 +826,7 @@ def page_affiliate_programs():
                     notes.strip(),
                 )
                 st.success("Program added.")
-                st.experimental_rerun()
+                safe_rerun()
 
     st.markdown("---")
     st.markdown("### Your Program List")
@@ -1853,7 +1866,7 @@ def main_app():
         st.markdown("---")
         if st.button("Log Out"):
             st.session_state["auth_ok"] = False
-            st.experimental_rerun()
+            safe_rerun()
 
     if page == "Dashboard":
         page_dashboard()
@@ -1889,5 +1902,3 @@ if __name__ == "__main__":
         login_page()
     else:
         main_app()
-
-
