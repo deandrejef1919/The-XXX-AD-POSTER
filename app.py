@@ -725,6 +725,7 @@ def page_dashboard():
                     <li><strong>Zapier:</strong> Fire webhooks on new ads and metric updates.</li>
                     <li><strong>Strategy:</strong> Step-by-step GEO & vertical roadmap for Toys, Dating & Cams.</li>
                     <li><strong>Links & Resources:</strong> Signup shortcuts for ad networks & affiliate programs.</li>
+                    <li><strong>Affiliate Directory:</strong> Quick overview of major adult affiliate programs.</li>
                 </ul>
             </div>
             """,
@@ -772,7 +773,7 @@ def page_dashboard():
 
 def page_affiliate_programs():
     render_header()
-    st.subheader("🎯 Affiliate Programs & Accounts")
+    st.subheader("🎯 Affiliate Programs & Accounts (Your Tracker)")
     st.markdown(
         "Use this section to track which adult-friendly affiliate programs and networks "
         "you’re researching, applied to, or already approved with."
@@ -1416,9 +1417,9 @@ def page_export_copy():
 
 def page_links_resources():
     render_header()
-    st.subheader("🔗 Links & Resources – Signup Hubs")
+    st.subheader("🔗 Links & Resources – Tools & Traffic")
     st.markdown(
-        "Quick access to popular adult-friendly **ad networks** and **affiliate programs**. "
+        "Quick access to popular adult-friendly **ad networks** and tracking tools. "
         "Always review each platform’s terms, legal requirements, and age restrictions."
     )
 
@@ -1437,7 +1438,7 @@ def page_links_resources():
             """
         )
 
-        st.markdown("### 🧪 Useful Tools (Tracking etc.)")
+        st.markdown("### 🧪 Tracking & Analytics")
         st.markdown(
             """
 - Voluum – https://voluum.com/
@@ -1447,30 +1448,213 @@ def page_links_resources():
         )
 
     with col2:
-        st.markdown("### 💰 Adult Affiliate Networks")
+        st.markdown("### 🧰 Other Helpful Tools")
         st.markdown(
             """
-- CrakRevenue – https://www.crakrevenue.com/
-- CPAMatica – https://cpamatica.io/
-- StripCash – https://stripcash.com/
-- CherryCash – https://cherrycash.com/
-- AdultFriendFinder Affiliates – https://www.affiliatefriendfinder.com/
-            """
-        )
-
-        st.markdown("### 🛒 Toys & Ecommerce Affiliate Programs")
-        st.markdown(
-            """
-- Lovehoney Affiliates – https://www.lovehoneygroup.com/affiliates/
-- Adam & Eve Affiliate – https://www.adamandeve.com/affiliates
-- EdenFantasys Affiliate – https://www.edenfantasys.com/affiliate/
+- Zapier (Automation) – https://zapier.com/
+- Google Analytics – https://analytics.google.com/
+- Cloudflare (DNS / protection) – https://www.cloudflare.com/
             """
         )
 
     st.markdown("---")
     st.info(
-        "Tip: when you sign up, add each network as a Program in the **Affiliate Programs** section, "
-        "with notes on payout model (CPA/RevShare/CPL) and any restrictions."
+        "Tip: when you sign up to a network, add it as a Program in the **Affiliate Programs** "
+        "section with notes on payout model (CPA/RevShare/CPL) and any restrictions."
+    )
+
+    render_footer()
+
+
+def page_affiliate_directory():
+    """
+    Static directory of major adult affiliate programs with descriptions and signup links.
+    This is NOT literally every program on earth, but a curated list you can start from.
+    """
+    render_header()
+    st.subheader("📚 Adult Affiliate Program Directory")
+    st.markdown(
+        "Use this as a **cheat-sheet** of well-known adult-friendly affiliate programs. "
+        "Each listing includes a short explanation and a direct link to learn more or sign up. "
+        "Always read their terms, age restrictions, and compliance rules carefully."
+    )
+
+    # Toys / Sexual Wellness
+    st.markdown("## 🛒 Toys & Sexual Wellness Programs")
+
+    st.markdown("### Lovehoney Affiliates")
+    st.markdown(
+        """
+- **Vertical:** Sex toys & sexual wellness  
+- **Why it matters:** One of the biggest global toy brands, strong presence in UK, EU, US.  
+- **Model:** Mainly CPA & rev-share on ecommerce sales.  
+- **Best use:** High-intent traffic from reviews, quizzes, and “best of” comparison pages.  
+- **Signup:** https://www.lovehoneygroup.com/affiliates/
+"""
+    )
+
+    st.markdown("### Adam & Eve Affiliate")
+    st.markdown(
+        """
+- **Vertical:** Adult products, lingerie, toys  
+- **Why it matters:** Long-running US-focused brand with strong name recognition.  
+- **Model:** CPA / rev-share on store orders.  
+- **Best use:** US traffic, banners + presell pages around discreet shipping & couples’ fun.  
+- **Signup:** https://www.adamandeve.com/affiliates
+"""
+    )
+
+    st.markdown("### EdenFantasys Affiliate")
+    st.markdown(
+        """
+- **Vertical:** Adult toys & accessories  
+- **Why it matters:** Established online store with a wide catalog.  
+- **Model:** Rev-share / CPA depending on setup.  
+- **Best use:** Content / review traffic and “add-on” offers in sexual wellness funnels.  
+- **Signup:** https://www.edenfantasys.com/affiliate/
+"""
+    )
+
+    # Mixed / Multi-vertical networks
+    st.markdown("## 🌐 Mixed Adult CPA Networks (Toys, Dating, Cams, More)")
+
+    st.markdown("### CrakRevenue")
+    st.markdown(
+        """
+- **Verticals:** Dating, cams, toys, games, sweepstakes and more  
+- **Why it matters:** One of the largest adult CPA networks with a huge offer catalog.  
+- **Model:** CPL, CPA, rev-share, and hybrid deals.  
+- **Best use:** When you want many offers under one roof and strong EPC stats.  
+- **Signup:** https://www.crakrevenue.com/
+"""
+    )
+
+    st.markdown("### CPAMatica")
+    st.markdown(
+        """
+- **Verticals:** Adult dating & casual hookup offers  
+- **Why it matters:** Very strong in dating lead-gen across many GEOs.  
+- **Model:** Mostly CPL / SOI / DOI; some CPA.  
+- **Best use:** Landing page + quiz funnels for US/UK and selected Tier-2 GEOs.  
+- **Signup:** https://cpamatica.io/
+"""
+    )
+
+    st.markdown("### ClickDealer (adult-friendly segments)")
+    st.markdown(
+        """
+- **Verticals:** Mixed – mainstream + some adult-friendly offers (depending on policy)  
+- **Why it matters:** Known global CPA network; adult inventory varies over time.  
+- **Model:** CPA / CPL on selected offers.  
+- **Best use:** When you want to mix mainstream and softer adult funnels.  
+- **Signup:** https://clickdealer.com/ (check with AM for current adult policy)
+"""
+    )
+
+    # Cams
+    st.markdown("## 🎥 Cam & Live Streaming Programs")
+
+    st.markdown("### StripCash (Stripchat)")
+    st.markdown(
+        """
+- **Vertical:** Live cam platform (Stripchat)  
+- **Why it matters:** Large cam brand with a lot of English-speaking users.  
+- **Model:** Rev-share, CPA, CPL and hybrid options.  
+- **Best use:** Long-term cam funnels where whales can deliver big lifetime value.  
+- **Signup:** https://stripcash.com/
+"""
+    )
+
+    st.markdown("### Chaturbate Affiliate")
+    st.markdown(
+        """
+- **Vertical:** Live adult cam site  
+- **Why it matters:** Very well-known cam platform, big global traffic.  
+- **Model:** Rev-share, CPA and hybrid (varies by campaign).  
+- **Best use:** Pop / banner traffic and warm chat/telegram/SEO audiences.  
+- **Signup:** https://chaturbate.com/affiliates/
+"""
+    )
+
+    st.markdown("### BongaCash")
+    st.markdown(
+        """
+- **Vertical:** Live cams (BongaCams)  
+- **Why it matters:** Strong international presence with many GEOs.  
+- **Model:** Rev-share, CPA, CPL and hybrid plans.  
+- **Best use:** International cam traffic, especially when you want multiple languages.  
+- **Signup:** https://www.bongacash.com/
+"""
+    )
+
+    st.markdown("### LiveJasmin / AWEmpire")
+    st.markdown(
+        """
+- **Vertical:** Premium live cam platform  
+- **Why it matters:** High-value, higher-end branding, long-standing player.  
+- **Model:** Rev-share and CPA/hybrid options for qualified partners.  
+- **Best use:** Higher-income GEOs with more premium positioning.  
+- **Signup:** https://www.awempire.com/
+"""
+    )
+
+    # Dating
+    st.markdown("## 💋 Adult & Casual Dating Programs")
+
+    st.markdown("### AdultFriendFinder Affiliate")
+    st.markdown(
+        """
+- **Vertical:** Adult dating & casual encounters  
+- **Why it matters:** Iconic adult dating brand with huge userbase.  
+- **Model:** CPL, CPA, rev-share depending on campaign.  
+- **Best use:** High-volume dating funnels and email/notification-based follow-up.  
+- **Signup:** https://www.affiliatefriendfinder.com/
+"""
+    )
+
+    st.markdown("### DatingGold")
+    st.markdown(
+        """
+- **Vertical:** Adult dating, niche dating brands  
+- **Why it matters:** Portfolio of multiple dating sites under one program.  
+- **Model:** CPL / CPA / rev-share (varies by offer).  
+- **Best use:** Testing different angles (mature, niche, casual) inside one ecosystem.  
+- **Signup:** https://www.datinggold.com/
+"""
+    )
+
+    st.markdown("### JuicyAds Dating Offers")
+    st.markdown(
+        """
+- **Verticals:** Advertising network + some internal dating/cam offers  
+- **Why it matters:** You can both buy traffic and run house offers.  
+- **Model:** CPL / CPA on selected internal campaigns.  
+- **Best use:** When you want to combine media buying and direct offers in one place.  
+- **Signup (network):** https://juicyads.com/
+"""
+    )
+
+    # How to use directory
+    st.markdown("---")
+    st.markdown("### How to use this directory inside THE XXX AD POSTER")
+
+    st.markdown(
+        """
+1. **Pick a program from this list.**  
+2. **Sign up on their site** and complete any verification / documents.  
+3. Once approved, **add it into your “Affiliate Programs & Accounts” tab** with:  
+   - Category (Toys / Dating / Cams / Other)  
+   - GEO focus (US / UK / CA / AU / Worldwide)  
+   - Payout type (CPL / CPA / Rev-share / Hybrid)  
+   - Any caps, restrictions or special notes.  
+4. Create ad creatives in the **Ad Builder** tab and map each ad to the right program.  
+5. Log your stats in the **Performance** and **A/B Split Tester** tabs to see which program + angle + GEO combo really prints.
+"""
+    )
+
+    st.info(
+        "This directory is a **starting point**, not an exhaustive list. "
+        "You can keep extending it by adding more programs into your own tracker tab."
     )
 
     render_footer()
@@ -1654,12 +1838,13 @@ def main_app():
             "",
             [
                 "Dashboard",
-                "Affiliate Programs",
+                "Affiliate Programs (Tracker)",
                 "Ad Builder",
                 "Performance",
                 "A/B Split Tester",
                 "Export / Copy",
                 "Strategy",
+                "Affiliate Program Directory",
                 "Links & Resources",
                 "Integrations",
             ],
@@ -1672,7 +1857,7 @@ def main_app():
 
     if page == "Dashboard":
         page_dashboard()
-    elif page == "Affiliate Programs":
+    elif page == "Affiliate Programs (Tracker)":
         page_affiliate_programs()
     elif page == "Ad Builder":
         page_ad_builder()
@@ -1684,6 +1869,8 @@ def main_app():
         page_export_copy()
     elif page == "Strategy":
         page_strategy()
+    elif page == "Affiliate Program Directory":
+        page_affiliate_directory()
     elif page == "Links & Resources":
         page_links_resources()
     elif page == "Integrations":
@@ -1702,6 +1889,5 @@ if __name__ == "__main__":
         login_page()
     else:
         main_app()
-
 
 
